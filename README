@@ -1,0 +1,20 @@
+This tool is meant to enable people to walk through the list of commits in a git repo.
+
+I built this to use in a presentation so I can demonstrate code in different stages of development without having to type it all in.
+
+ruby gitforward.rb <git repo dir here - parent of the .git dir>
+
+This will create an index of all commits if it does not exist, using git log. It will then display the index. If you have already use the next command (see below) then it will also display which commit the repo is currently on.
+
+ruby gitforward.rb <git repo dir here - parent of the .git dir> next
+The first time this is run it will checkout the first commit in the list. On each subsequent invocation it will checkout the successor to the currently checkout commit.
+
+ruby gitforward.rb <git repo dir here - parent of the .git dir> reset
+This command recreates the index, and deletes the reference to the last checked out commit.
+
+ruby gitforward.rb <git repo dir here - parent of the .git dir> <branch name>
+This checks out the specified branch instead of the next commit.
+
+ruby gitforward.rb <git repo dir here - parent of the .git dir> <commit index>
+This checks out the nth commit in the gitforward index.
+
