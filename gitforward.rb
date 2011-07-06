@@ -1,7 +1,7 @@
-git_repo = ARGV[0]
-commit_index = ARGV[1]
+GIT_REPO = ARGV[0]
+command = ARGV[1]
 
-if !File.exist? git_repo
+if !File.exist? GIT_REPO
 	puts "Directory #{ARGV[0]} does not exist."
 elsif !File.exist? ARGV[0] + "/.git"
 	puts "Directory #{ARGV[0]} is not a git repository."
@@ -19,61 +19,73 @@ def run_command(cmd)
 	{:status => $?.exitstatus, :output => output}
 end
 
-git_log_data = "#{File.basename ARGV[0]}.gitwalkcommits"
-git_log_current = "#{File.basename ARGV[0]}.gitwalkcurrent"
+GIT_LOG_DATA= "#{File.basename ARGV[0]}.gitwalkcommits"
+GIT_LOG_CURRENT = "#{File.basename ARGV[0]}.gitwalkcurrent"
 
-if !File.exist?(git_log_data) || ARGV[1] == 'reset'
+if !File.exist?(GIT_LOG_DATA) || ARGV[1] == 'reset'
 	data = run_command("cd #{ARGV[0]}; git log | grep ^commit | cut -d \\  -f 2 2>&1")
-	File.open(git_log_data, 'w+') {|f| f.write data[:output].strip }
-	File.delete(git_log_current) if File.exist?(git_log_current)
+	File.open(GIT_LOG_DATA, 'w+') {|f| f.write data[:output].strip }
+	File.delete(GIT_LOG_CURRENT) if File.exist?(GIT_LOG_CURRENT)
 end
 
-exit 0 if ARGV[1] == 'reset'
+commits = File.read(GIT_LOG_DATA).split("\n").reverse
 
-commits = File.read(git_log_data).split("\n").reverse
+commit_index = 0
 
-if commit_index == nil
-	current_index = (File.exist?(git_log_current) ? File.read(git_log_current).to_i : nil)
+def checkout(treeish)
+        run_command("cd #{GIT_REPO}; git checkout #{treeish} 2>&1")
+end
+
+def point_to_commit(commits, commit_index)
+	if commits.length == 0
+		puts "No commits found in the repo yet."
+		exit(0)
+	end
+
+	commit_index = commit_index.to_i
+
+	if commit_index >= commits.length
+		puts "Specified commit index is greater than the number of commits in this repo."
+		exit 0
+	end
+
+	checkout commits[commit_index]
+	File.open(GIT_LOG_CURRENT, 'w+') {|f| f.write commit_index.to_s }
+end
+
+def get_current_index(default)
+	return File.read(GIT_LOG_CURRENT).to_i if File.exist?(GIT_LOG_CURRENT)
+	return default
+end
+
+if command == nil
+	current_index = get_current_index(nil)
 	commits.each_with_index {|commit, i|
 		print '=> ' if i == current_index
 		puts commit
 	}
 	exit(0)
-elsif commit_index == 'start'
-	commit_index = 0
-elsif commit_index == 'end'
-	commit_index = commits.length - 1
-elsif commit_index == 'next'
-	if !File.exist?(git_log_current)
-		commit_index = 0
-	else
-		commit_index = File.read(git_log_current).to_i + 1
-	end
+elsif command == 'reset'
+	exit 0
+elsif command == 'start'
+	point_to_commit commits, 0
+elsif command == 'end'
+	point_to_commit commits, commits.length - 1
+elsif command == 'next'
+	commit_index = get_current_index(0)
 
 	if commit_index >= commits.length
 		puts "Already at the latest commit."
 		exit(0)
 	end
+
+	point_to_commit commits, commit_index
 else
-	if ARGV[1].to_i.to_s != ARGV[1]
-		puts "Checkout out the #{ARGV[1]} branch"
-		run_command("cd #{git_repo}; git checkout #{ARGV[1]} 2>&1")
+	if command.to_i.to_s != command
+		puts "Checkout out the #{branch} branch"
+		checkout command
 		exit 0
 	end
 end
 
-if commits.length == 0
-	puts "No commits found in the repo yet."
-	exit(0)
-end
-
-commit_index = commit_index.to_i
-
-if commit_index >= commits.length
-	puts "Specified commit index is greater than the number of commits in this repo."
-	exit 0
-end
-
-run_command("cd #{git_repo}; git checkout #{commits[commit_index]} 2>&1")
-File.open(git_log_current, 'w+') {|f| f.write commit_index.to_s }
 
