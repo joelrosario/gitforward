@@ -19,17 +19,39 @@ def run_command(cmd)
 	{:status => $?.exitstatus, :output => output}
 end
 
+def get_commits_from_repo
+	commits = []
+	lines = []
+	`cd #{GIT_REPO}; git log`.split("\n").each {|line|
+		if line =~ /^commit/
+			commits << lines if lines.length > 0
+			lines = []
+		end
+
+		lines << line
+	}
+
+	commits << lines if lines.length > 0
+	commits.collect {|commit|
+		[commit[0], commit[commit.index("") + 1..commit.length]].flatten
+	}.collect {|commit|
+		{
+			:name => commit[0].split(' ')[1],
+			:comment => commit[1].strip
+		}
+	}
+end
+
 GIT_LOG_DATA= "#{File.basename ARGV[0]}.gitwalkcommits"
 GIT_LOG_CURRENT = "#{File.basename ARGV[0]}.gitwalkcurrent"
 
 if !File.exist?(GIT_LOG_DATA) || ARGV[1] == 'reset'
-	data = run_command("cd #{ARGV[0]}; git log | grep ^commit | cut -d \\  -f 2 2>&1")
-	File.open(GIT_LOG_DATA, 'w+') {|f| f.write data[:output].strip }
+	data = get_commits_from_repo
+	File.open(GIT_LOG_DATA, 'w+') {|f| f.write data.collect {|commit| "#{commit[:name]} #{commit[:comment]}"}.join("\n") }
 	File.delete(GIT_LOG_CURRENT) if File.exist?(GIT_LOG_CURRENT)
 end
 
-commits = File.read(GIT_LOG_DATA).split("\n").reverse
-
+commits = File.read(GIT_LOG_DATA).split("\n").reverse.collect {|l| name, comment = l.split(' ', 2); {:name => name, :comment => comment} }
 commit_index = 0
 
 def checkout(treeish)
@@ -38,7 +60,9 @@ end
 
 def point_to_commit(commits, commit_index)
 	commit_index = commit_index.to_i
-	checkout commits[commit_index]
+	commit = commits[commit_index]
+	puts " * #{commit_index}. #{commit[:name]} -> #{commit[:comment]}"
+	checkout commit[:name]
 	File.open(GIT_LOG_CURRENT, 'w+') {|f| f.write commit_index.to_s }
 end
 
@@ -90,15 +114,30 @@ end
 
 if command == nil
 	current_index = get_current_index(nil)
+	index_str_length = (commits.length - 1).to_s.length
 	commits.each_with_index {|commit, i|
-		print i.to_s + '. '
-		print '=> ' if i == current_index
-		puts commit
+		if i == current_index
+			print "* "
+		else
+			print "  "
+		end
+
+		print i.to_s.rjust(index_str_length, ' ') + '. '
+		print commit[:name]
+
+		if i == current_index
+			print " -> "
+		else
+			print "    "
+		end
+
+		puts commit[:comment]
 	}
 elsif command == 'reset'
 	exit 0
 else
 	treeish = to_treeish(command).call(commits)
+
 	if treeish[:type] == :commit_index
 		point_to_commit commits, treeish[:commit_index]
 	elsif treeish[:type] == :branch
