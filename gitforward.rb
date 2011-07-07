@@ -66,6 +66,8 @@ end
 def valid_commit_index(commits, commit_index)
 	if commit_index >= commits.length
 		{:type => :error, :message => "Commit index '#{commit_index}' is greater than the number of commits."}
+	elsif commit_index < 0
+		{:type => :error, :message => "Commit index '#{commit_index}' is less than 0." }
 	else
 		to_commit(commit_index)
 	end
@@ -75,7 +77,8 @@ def to_treeish(val)
 	{
 		'start' => unless_no_commits {|commits| to_commit(0) },
 		'end'   => unless_no_commits {|commits| to_commit(commits.length - 1) },
-		'next'  => unless_no_commits {|commits| valid_commit_index(commits, get_current_index(-1) + 1) }
+		'next'  => unless_no_commits {|commits| valid_commit_index(commits, get_current_index(-1) + 1) },
+		'prev'  => unless_no_commits {|commits| valid_commit_index(commits, get_current_index(1) -1 ) }
 	}[val] || proc {|commits|
 		if val.to_i.to_s != val
 			{:type => :branch, :name => val} 
@@ -102,7 +105,7 @@ else
 		puts "Checking out branch #{treeish[:name]}"
 		checkout treeish[:name]
 	elsif treeish[:type] == :error
-		puts treeish[:message]
+		puts "Error: " + treeish[:message]
 	else
 		puts "Unexpected error."
 	end
