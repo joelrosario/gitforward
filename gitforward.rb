@@ -37,18 +37,7 @@ def checkout(treeish)
 end
 
 def point_to_commit(commits, commit_index)
-	if commits.length == 0
-		puts "No commits found in the repo yet."
-		exit(0)
-	end
-
 	commit_index = commit_index.to_i
-
-	if commit_index >= commits.length
-		puts "Specified commit index is greater than the number of commits in this repo."
-		exit 0
-	end
-
 	checkout commits[commit_index]
 	File.open(GIT_LOG_CURRENT, 'w+') {|f| f.write commit_index.to_s }
 end
@@ -58,34 +47,64 @@ def get_current_index(default)
 	return default
 end
 
-if command == nil
-	current_index = get_current_index(nil)
-	commits.each_with_index {|commit, i|
-		print '=> ' if i == current_index
-		puts commit
+def to_commit(commit_index)
+	return {:type => :commit_index, :commit_index => commit_index}
+end
+
+def unless_no_commits
+	proc {|commits|
+		if commits.length == 0
+			{:type => :error, :message => 'No commits'}
+		elsif block_given?
+			yield(commits)
+		else
+			{:type => :error, :message => "Couldn't figure out which commit" }
+		end
 	}
-	exit(0)
-elsif command == 'reset'
-	exit 0
-elsif command == 'start'
-	point_to_commit commits, 0
-elsif command == 'end'
-	point_to_commit commits, commits.length - 1
-elsif command == 'next'
-	commit_index = get_current_index(0)
+end
 
+def valid_commit_index(commits, commit_index)
 	if commit_index >= commits.length
-		puts "Already at the latest commit."
-		exit(0)
-	end
-
-	point_to_commit commits, commit_index
-else
-	if command.to_i.to_s != command
-		puts "Checkout out the #{branch} branch"
-		checkout command
-		exit 0
+		{:type => :error, :message => "Commit index '#{commit_index}' is greater than the number of commits."}
+	else
+		to_commit(commit_index)
 	end
 end
 
+def to_treeish(val)
+	{
+		'start' => unless_no_commits {|commits| to_commit(0) },
+		'end'   => unless_no_commits {|commits| to_commit(commits.length - 1) },
+		'next'  => unless_no_commits {|commits| valid_commit_index(commits, get_current_index(-1) + 1) }
+	}[val] || proc {|commits|
+		if val.to_i.to_s != val
+			{:type => :branch, :name => val} 
+		else
+			unless_no_commits {|commits| valid_commit_index(commits, val.to_i) }.call(commits)
+		end
+	}
+end
+
+if command == nil
+	current_index = get_current_index(nil)
+	commits.each_with_index {|commit, i|
+		print i.to_s + '. '
+		print '=> ' if i == current_index
+		puts commit
+	}
+elsif command == 'reset'
+	exit 0
+else
+	treeish = to_treeish(command).call(commits)
+	if treeish[:type] == :commit_index
+		point_to_commit commits, treeish[:commit_index]
+	elsif treeish[:type] == :branch
+		puts "Checking out branch #{treeish[:name]}"
+		checkout treeish[:name]
+	elsif treeish[:type] == :error
+		puts treeish[:message]
+	else
+		puts "Unexpected error."
+	end
+end
 
