@@ -15,6 +15,9 @@ elif not os.path.exists(GIT_REPO + "/.git"):
 GIT_LOG_DATA = os.path.basename(GIT_REPO) + ".gitwalkcommits"
 GIT_LOG_CURRENT = os.path.basename(GIT_REPO) + ".gitwalkcurrent"
 
+if not os.path.exists(GIT_LOG_DATA) or command == 'reset':
+	write_commits_to_index(get_commits_from_repo())
+
 def get_commits_from_repo():
 	commits = []
 	lines = []
@@ -31,8 +34,7 @@ def get_commits_from_repo():
 
 	return [{'name': commit[0].split(' ')[1], 'comment': commit[commit.index("") + 1].strip() } for commit in commits][::-1]
 
-if not os.path.exists(GIT_LOG_DATA) or command == 'reset':
-	commits_in_repo = get_commits_from_repo()
+def write_commits_to_index(commits):
 	with open(GIT_LOG_DATA, 'w+') as f:
 		commits = get_commits_from_repo()
 		for commit in commits:
