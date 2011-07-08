@@ -108,12 +108,7 @@ def to_treeish(val):
 def format_commit(commits, index):
 	index_str_length = len(str(len(commits) - 1))
 	format = "%(num)" + str(index_str_length) + "s"
-	line = ""
-	line += "  "
-	line += format % {'num': str(index) } + ". "
-	line += commits[index]['name']
-	line += '   '
-	line += commits[index]['comment']
+	line = "  " + format % {'num': str(index) } + ". " + commits[index]['name'] + '   ' + commits[index]['comment']
 	return line
 
 def format_current_commit(commits, index):
