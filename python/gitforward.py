@@ -83,7 +83,7 @@ def checkout(treeish):
 
 def to_treeish(val):
 	def valid_commit_index(index):
-		return unless_no_commits(lambda commits: within_bounds(commits, index))
+		return unless_no_commits(lambda commits: within_bounds(commits, int(index)))
 
 	commit_indices = {
 		'start': 0,
@@ -97,25 +97,22 @@ def to_treeish(val):
 
 	def defaultaction(commits):
 		try:
-			if len(commits) > 0: return valid_commit_index(str(int(str(val))))
+			if len(commits) > 0: return valid_commit_index(str(int(str(val))))(commits)
 			return error_msg('No commit found.')
 		except ValueError:
 			return {'type': 'branch', 'name': val}
 
 	return defaultaction
 
-def format_commit(commits, index):
+def format_commit(commits, index, prefix='  '):
 	index_str_length = len(str(len(commits) - 1))
 	format = "%(num)" + str(index_str_length) + "s"
-	line = "  " + format % {'num': str(index) } + ": " + commits[index]['comment']
+	line = prefix + format % {'num': str(index) } + ": " + commits[index]['comment']
 	return line
 
 def format_current_commit(commits, index):
-	index_str_length = len(str(len(commits) - 1))
-	format = "%(num)" + str(index_str_length) + "s"
-	line = "* " + format % {'num': str(index) } + ": " + commits[index]['comment']
-	return line
-
+	return format_commit(commits, index, '> ')
+	
 def point_to_commit(commits, commit_index):
 	commit_index = int(commit_index)
 	commit = commits[commit_index]
