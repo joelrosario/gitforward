@@ -85,20 +85,19 @@ def to_treeish(val):
 	def valid_commit_index(index):
 		return unless_no_commits(lambda commits: within_bounds(commits, index))
 
-	actions = {
-		'start': valid_commit_index(0),
-		'end': valid_commit_index(len(commits) - 1),
-		'next': valid_commit_index(get_current_index(-1) + 1),
-		'prev': valid_commit_index(get_current_index(1) - 1)
+	commit_indices = {
+		'start': 0,
+		'end': len(commits) - 1,
+		'next': get_current_index(-1) + 1,
+		'prev': get_current_index(1) - 1
 	}
 
-	if val in actions:
-		return actions[val]
+	if val in commit_indices:
+		return valid_commit_index(commit_indices[val])
 
 	def defaultaction(commits):
 		try:
-			if len(commits) > 0:
-				return to_commit_index(str(int(str(val))))
+			if len(commits) > 0: return valid_commit_index(str(int(str(val))))
 			return error_msg('No commit found.')
 		except ValueError:
 			return {'type': 'branch', 'name': val}
