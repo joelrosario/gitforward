@@ -48,6 +48,10 @@ def get_current_index(default):
 			return int(f.read())
 	return default
 
+def write_current_index(index):
+	with open(GIT_LOG_CURRENT, 'w+') as f:
+		f.write(str(index))
+
 def unless_no_commits(fn):
 	def _(commits):
 		if len(commits) == 0: return {'type': 'error', 'message': 'No commit found.'}
@@ -118,8 +122,7 @@ def point_to_commit(commits, commit_index):
 	commit = commits[commit_index]
 	print format_current_commit(commits, commit_index)
 	checkout(commit['name'])
-	with open(GIT_LOG_CURRENT, 'w+') as f:
-		f.write(str(commit_index))
+	write_current_index(commit_index)
 
 commits = get_commits_from_index()
 
