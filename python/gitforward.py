@@ -18,6 +18,28 @@ GIT_LOG_CURRENT = os.path.basename(GIT_REPO) + ".gitwalkcurrent"
 if not os.path.exists(GIT_LOG_DATA) or command == 'reset':
 	write_commits_to_index(get_commits_from_repo())
 
+commits = get_commits_from_index()
+
+if command == None:
+	current_index = get_current_index(None)
+
+	for i in range(len(commits)):
+		print (format_current_commit if i == current_index else format_commit)(commits, i)
+elif command == 'reset':
+	if os.path.exists(GIT_LOG_CURRENT): os.remove(GIT_LOG_CURRENT)
+else:
+	treeish = to_treeish(command)(commits)
+
+	if treeish['type'] == 'commitindex':
+		point_to_commit(commits, treeish['index'])
+	elif treeish['type'] == 'branch':
+		print "Checking out branch " + treeish['name']
+		checkout(treeish['name'])
+	elif treeish['type'] == 'error':
+		print treeish['message']
+	else:
+		print "Unexpected error."
+
 def get_commits_from_repo():
 	commits = []
 	lines = []
@@ -125,25 +147,3 @@ def point_to_commit(commits, commit_index):
 	print format_current_commit(commits, commit_index)
 	checkout(commit['name'])
 	write_current_index(commit_index)
-
-commits = get_commits_from_index()
-
-if command == None:
-	current_index = get_current_index(None)
-
-	for i in range(len(commits)):
-		print (format_current_commit if i == current_index else format_commit)(commits, i)
-elif command == 'reset':
-	if os.path.exists(GIT_LOG_CURRENT): os.remove(GIT_LOG_CURRENT)
-else:
-	treeish = to_treeish(command)(commits)
-
-	if treeish['type'] == 'commitindex':
-		point_to_commit(commits, treeish['index'])
-	elif treeish['type'] == 'branch':
-		print "Checking out branch " + treeish['name']
-		checkout(treeish['name'])
-	elif treeish['type'] == 'error':
-		print treeish['message']
-	else:
-		print "Unexpected error."
