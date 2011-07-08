@@ -119,12 +119,7 @@ def format_commit(commits, index):
 def format_current_commit(commits, index):
 	index_str_length = len(str(len(commits) - 1))
 	format = "%(num)" + str(index_str_length) + "s"
-	line = ""
-	line += "> "
-	line += format % {'num': str(index) } + ". "
-	line += commits[index]['name']
-	line += ' > '
-	line += commits[index]['comment']
+	line = "> " + format % {'num': str(index) } + ". " + commits[index]['name'] + ' > ' + commits[index]['comment']
 	return line
 
 def point_to_commit(commits, commit_index):
@@ -143,7 +138,7 @@ if command == None:
 	for i in range(len(commits)):
 		print (format_current_commit if i == current_index else format_commit)(commits, i)
 elif command == 'reset':
-	os.remove(GIT_LOG_CURRENT)
+	if os.path.exists(GIT_LOG_CURRENT): os.remove(GIT_LOG_CURRENT)
 else:
 	treeish = to_treeish(command)(commits)
 
