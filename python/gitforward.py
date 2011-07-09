@@ -102,7 +102,7 @@ def get_commits_from_repo():
 	commits = []
 	lines = []
 
-	rawlogs = [l.strip() for l in [l.strip() for l in execute_cmd(['git', 'log']).split("\n")]]
+	rawlogs = [l.strip() for l in [l.strip() for l in execute_cmd(['git', 'log'], git_repo).split("\n")]]
 
 	for line in rawlogs:
 		if re.match(r'^commit', line):
@@ -175,7 +175,7 @@ def within_bounds(commits, index):
 	return to_commit_index(index)
 
 def checkout(treeish):
-	execute_cmd(['git', 'checkout', treeish])
+	execute_cmd(['git', 'checkout', treeish], git_repo)
 
 def to_treeish(val, db_data):
 	'''
