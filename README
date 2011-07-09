@@ -2,19 +2,27 @@ This tool is meant to enable people to walk through the list of commits in a git
 
 I built this to use in a presentation so I can demonstrate code in different stages of development without having to type it all in.
 
-ruby gitforward.rb <git repo dir here - parent of the .git dir>
+Here is the output of python gitforward.py
 
-This will create an index of all commits if it does not exist, using git log. It will then display the index. If you have already use the next command (see below) then it will also display which commit the repo is currently on.
+usage: gitforward.py [-h] [-n] [-p] [-s] [-e] [-b BRANCH] [-i INDEX] [-l] [-r]
+                     [-t] [-o REPOSITORY]
 
-ruby gitforward.rb <git repo dir here - parent of the .git dir> next
-The first time this is run it will checkout the first commit in the list. On each subsequent invocation it will checkout the successor to the currently checkout commit.
+Gitforward helps you step easily from one commit to another, using a few
+simple directives.
 
-ruby gitforward.rb <git repo dir here - parent of the .git dir> reset
-This command recreates the index, and deletes the reference to the last checked out commit.
-
-ruby gitforward.rb <git repo dir here - parent of the .git dir> <branch name>
-This checks out the specified branch instead of the next commit.
-
-ruby gitforward.rb <git repo dir here - parent of the .git dir> <commit index>
-This checks out the nth commit in the gitforward index.
+optional arguments:
+  -h, --help            show this help message and exit
+  -n, --next            Next commit
+  -p, --prev            Previous commit
+  -s, --start           First commit
+  -e, --end             Last commit
+  -b BRANCH, --branch BRANCH
+                        Branch to checkout
+  -i INDEX, --index INDEX
+                        Index of the commit in Gitforward's list to checkout
+  -l, --list            Display all commits
+  -r, --reset           Reset data
+  -t, --tests           Run tests
+  -o REPOSITORY, --repository REPOSITORY
+                        The git repository to work with
 
