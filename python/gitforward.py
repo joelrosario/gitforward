@@ -3,11 +3,30 @@ import os
 import re
 import subprocess
 
-GIT_REPO = sys.argv[1]
-command = sys.argv[2] if len(sys.argv) > 2 else None
-GIT_LOG_DATA = os.path.basename(GIT_REPO) + ".gitwalkcommits"
-GIT_LOG_CURRENT = os.path.basename(GIT_REPO) + ".gitwalkcurrent"
-GIT_LOG_DATA = os.path.basename(GIT_REPO) + ".gitfwd"
+import argparse
+
+parser = argparse.ArgumentParser(description='Gitforward helps you step easily from one commit to another, using a few simple directives.')
+
+parser.add_argument('-n', '--next', dest='next', action='store_const', const='next', help='Next commit')
+parser.add_argument('-p', '--prev', dest='prev', action='store_const', const='prev', help='Previous commit')
+parser.add_argument('-s', '--start', dest='start', action='store_const', const='start', help='First commit')
+parser.add_argument('-e', '--end', dest='end', action='store_const', const='end', help='Last commit')
+parser.add_argument('-b', '--branch', dest='branch', help='Branch to checkout')
+parser.add_argument('-i', '--index', dest='index', type=int, help='Index of the commit in Gitforward\'s list to checkout')
+parser.add_argument('-l', '--list', dest='list', action='store_const', const='list', help='Display all commits')
+parser.add_argument('-r', '--reset', dest='reset', action='store_const', const='reset', help='Reset data')
+parser.add_argument('-t', '--tests', dest='tests', action='store_const', const='tests', help='Run tests')
+parser.add_argument('-o', '--repository', dest='repository', help='The git repository to work with')
+
+cmdargs = parser.parse_args(sys.argv[1:])
+cmdargs.direction = cmdargs.next or cmdargs.prev or cmdargs.start or cmdargs.end
+
+if not cmdargs.tests and not cmdargs.repository:
+	print "Please specify a repository."
+	sys.exit(0)
+
+git_repo = cmdargs.repository
+git_log_data = (os.path.basename(git_repo) + ".gitfwd") if git_repo else None
 
 def to_blob(data):
 	'''
@@ -34,14 +53,14 @@ def from_blob(data):
 	return pickle.load(f)
 
 def read_db():
-	if not os.path.exists(GIT_LOG_DATA):
+	if not os.path.exists(git_log_data):
 		return {}
 
-	with open(GIT_LOG_DATA) as f:
+	with open(git_log_data) as f:
 		return from_blob(f.read())
 
 def write_db(data):
-	with open(GIT_LOG_DATA, 'w+') as f:
+	with open(git_log_data, 'w+') as f:
 		return f.write(to_blob(data))
 
 def write_db_data(key, value):
@@ -58,14 +77,14 @@ def read_db_data(key, default=None):
 
 def del_db_data(key):
 	db = read_db()
-	if key in db: del db
+	if key in db: del db[key]
 	write_db(db)
 	
 def get_commits_from_repo():
 	commits = []
 	lines = []
 
-	rawlogs = [l.strip() for l in subprocess.Popen(['git', 'log'], stdout=subprocess.PIPE, cwd=GIT_REPO).stdout.readlines()]
+	rawlogs = [l.strip() for l in subprocess.Popen(['git', 'log'], stdout=subprocess.PIPE, cwd=git_repo).stdout.readlines()]
 
 	for line in rawlogs:
 		if re.match(r'^commit', line):
@@ -79,33 +98,33 @@ def get_commits_from_repo():
 
 def write_commits_to_index(commits):
 	commits = get_commits_from_repo()
-	commit_data = str.join('\n', [commit['name'] + ' ' + commit['comment'] + '\n' for commit in commits])
-	write_db_data('commitdata', commit_data)
+	write_db_data('commits', commits)
 
-def get_commits_from_index():
+def parse_commit_data(data):
 	no_zero_length_lines = lambda l: len(l.strip()) > 0
-	lines = filter(no_zero_length_lines, read_db_data('commitdata', '').split('\n'))
+	lines = filter(no_zero_length_lines, data.split('\n'))
 	return [{'name': line[0], 'comment': line[1].strip()} for line in [line.split(' ', 1) for line in lines] ]
 
-def get_current_index(default):
-	return int(read_db_data('current', default))
+def get_commits_from_index():
+	return read_db_data('commits', {})
+
+def get_current_index(db_data, default):
+	if 'current' in db_data: return int(db_data['current'])
+	return default
 
 def write_current_index(index):
 	write_db_data('current', str(index))
 
-def unless_no_commits(fn):
+def unless_no_commits(commits, fn):
 	'''
 	>>> commits = [{'comment': 'testcomment', 'name': 'testname'}, {'comment': 'testcomment2', 'name': 'testname2'}]
-	>>> unless_no_commits(lambda x: x)([])
+	>>> unless_no_commits([], lambda x: x)
 	{'message': 'No commit found.', 'type': 'error'}
-	>>> unless_no_commits(lambda x: x)(commits)
+	>>> unless_no_commits(commits, lambda x: x)
 	[{'comment': 'testcomment', 'name': 'testname'}, {'comment': 'testcomment2', 'name': 'testname2'}]
 	'''
-	def _(commits):
-		if len(commits) == 0: return {'type': 'error', 'message': 'No commit found.'}
-		return fn(commits)
-	
-	return _
+	if len(commits) == 0: return {'type': 'error', 'message': 'No commit found.'}
+	return fn(commits)
 
 def to_commit_index(index):
 	'''
@@ -135,7 +154,7 @@ def within_bounds(commits, index):
 
 def checkout(treeish):
 	try:
-		proc = subprocess.Popen(['git', 'checkout', treeish], cwd=GIT_REPO, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		proc = subprocess.Popen(['git', 'checkout', treeish], cwd=git_repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		proc.wait()
 		if proc.returncode != 0:
 			print "Error running command 'git checkout " + treeish + "'"
@@ -146,42 +165,38 @@ def checkout(treeish):
 	except OSError, e:
 		print "Execution failed: " + str(e)
 
-def to_treeish(val):
+def to_treeish(val, db_data):
 	'''
-	>>> commits = [{'comment': 'testcomment', 'name': 'testname'}, {'comment': 'testcomment2', 'name': 'testname2'}]
-	>>> def get_current_index(default): return default
-	>>> def to_treeish_test(command): return to_treeish(command)(commits)
+	>>> db_data = {'commits': [{'comment': 'testcomment', 'name': 'testname'}, {'comment': 'testcomment2', 'name': 'testname2'}, {'comment': 'testcomment3', 'name': 'testname3'}], 'current': '1'}
+	>>> def to_treeish_test(command): return to_treeish(command, db_data)
 	>>> to_treeish_test('start')
 	{'index': '0', 'type': 'commitindex'}
 	>>> to_treeish_test('end')
-	{'index': '1', 'type': 'commitindex'}
+	{'index': '2', 'type': 'commitindex'}
 	>>> to_treeish_test('next')
-	{'index': '0', 'type': 'commitindex'}
+	{'index': '2', 'type': 'commitindex'}
 	>>> to_treeish_test('prev')
 	{'index': '0', 'type': 'commitindex'}
 	'''
-
 	def valid_commit_index(index):
-		return unless_no_commits(lambda commits: within_bounds(commits, int(index)))
+		return unless_no_commits(commits, lambda commits: within_bounds(commits, int(index)))
 
-	commit_indices = {
-		'start': valid_commit_index(0),
-		'end': unless_no_commits(lambda commits: within_bounds(commits, len(commits) - 1)),
-		'next': valid_commit_index(get_current_index(-1) + 1),
-		'prev': valid_commit_index(get_current_index(1) - 1)
-	}
+	commits = db_data['commits']
 
-	if val in commit_indices:
-		return commit_indices[val]
-
-	def defaultaction(commits):
+	if val == 'start':
+		return valid_commit_index(0)
+	elif val == 'end':
+		return unless_no_commits(commits, lambda commits: within_bounds(commits, len(commits) - 1))
+	elif val == 'next':
+		return unless_no_commits(commits, lambda commits: within_bounds(commits, get_current_index(db_data, -1) + 1))
+	elif val == 'prev':
+		return unless_no_commits(commits, lambda commits: within_bounds(commits, get_current_index(db_data, 1) - 1))
+	else:
 		try:
-			if len(commits) > 0: return valid_commit_index(str(int(str(val))))(commits)
+			if len(commits) > 0: return valid_commit_index(str(int(str(val))))
 			return error_msg('No commit found.')
 		except ValueError:
 			return {'type': 'branch', 'name': val}
-
-	return defaultaction
 
 def format_commit(commits, index, prefix='  '):
 	'''
@@ -200,43 +215,59 @@ def format_current_commit(commits, index):
 	'''
 	return format_commit(commits, index, '> ')
 
-def point_to_commit(commits, commit_index):
+def point_to_commit(db_data, commit_index):
 	commit_index = int(commit_index)
+	commits = db_data['commits']
 	commit = commits[commit_index]
 	print format_current_commit(commits, commit_index)
 	checkout(commit['name'])
-	write_current_index(commit_index)
+	db_data['current'] = commit_index
+	write_db(db_data)
 
-if __name__ == '__main__' and sys.argv[1] == '--run-tests':
+if __name__ == '__main__' and cmdargs.tests:
 	import doctest
 	doctest.testmod()
 elif __name__ == '__main__':
-	if not os.path.exists(GIT_REPO):
-		print "Directory " + GIT_REPO + " does not exist."
-		sys.exit(0)
-	elif not os.path.exists(GIT_REPO + "/.git"):
-		print "Directory " + GIT_REPO + "/.git is not a git repository."
+	git_repo = cmdargs.repository
+	git_log_data = os.path.basename(git_repo) + ".gitfwd"
 
-	if not os.path.exists(GIT_LOG_DATA) or command == 'reset':
+	if not os.path.exists(git_repo):
+		print "Directory " + git_repo + " does not exist."
+		sys.exit(0)
+	elif not os.path.exists(git_repo + "/.git"):
+		print "Directory " + git_repo + "/.git is not a git repository."
+
+	if not os.path.exists(git_log_data) or cmdargs.reset:
 		write_commits_to_index(get_commits_from_repo())
 
-	commits = get_commits_from_index()
-	if command == None:
-		current_index = get_current_index(None)
+	db_data = read_db()
+	commits = db_data['commits']
+	
+	if cmdargs.list:
+		current_index = get_current_index(db_data, -1)
 		
 		for i in range(len(commits)):
 			print (format_current_commit if i == current_index else format_commit)(commits, i)
-	elif command == 'reset':
+	elif cmdargs.reset:
 		del_db_data('current')
-	else:
-		treeish = to_treeish(command)(commits)
-
-		if treeish['type'] == 'commitindex':
-			point_to_commit(commits, treeish['index'])
-		elif treeish['type'] == 'branch':
-			print "Checking out branch " + treeish['name']
-			checkout(treeish['name'])
-		elif treeish['type'] == 'error':
+	elif cmdargs.direction:
+		treeish = to_treeish(cmdargs.direction, db_data)
+		if treeish['type'] == 'error':
 			print treeish['message']
 		else:
-			print "Unexpected error."
+			point_to_commit(db_data, treeish['index'])
+	elif cmdargs.index:
+		treeish = to_treeish(cmdargs.index, db_data)
+		if treeish['type'] == 'error':
+			print treeish['message']
+		else:
+			point_to_commit(db_data, treeish['index'])
+	elif cmdargs.branch:
+		treeish = to_treeish(cmdargs.branch, db_data)
+		if treeish['type'] == 'error':
+			print treeish['message']
+		else:
+			print "Checking out branch " + treeish['name']
+			checkout(treeish['name'])
+	else:
+		print 'No command specified.'
