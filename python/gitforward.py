@@ -79,12 +79,30 @@ def del_db_data(key):
 	db = read_db()
 	if key in db: del db[key]
 	write_db(db)
-	
+
+def execute_cmd(cmd, cwd=None):
+	try:
+		proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		proc.wait()
+		if proc.returncode != 0:
+			print "Error running command " + str.join(',', cmd)
+			print "Return code: " + str(proc.returncode)
+			print "Standout output:"
+			print proc.stdout.read()
+			print ""
+			print "Standard error:"
+			print proc.stderr.read()
+			sys.exit(0)
+		return proc.stdout.read()
+	except OSError, e:
+		print "Execution failed: " + str(e)
+		sys.exit(0)
+
 def get_commits_from_repo():
 	commits = []
 	lines = []
 
-	rawlogs = [l.strip() for l in subprocess.Popen(['git', 'log'], stdout=subprocess.PIPE, cwd=git_repo).stdout.readlines()]
+	rawlogs = [l.strip() for l in [l.strip() for l in execute_cmd(['git', 'log']).split("\n")]]
 
 	for line in rawlogs:
 		if re.match(r'^commit', line):
@@ -134,6 +152,10 @@ def to_commit_index(index):
 	return {'type': 'commitindex', 'index': str(index)}
 
 def error_msg(message):
+	'''
+	>>> error_msg('hello world')
+	{'message': 'Error: hello world', 'type': 'error'}
+	'''
 	return {'type': 'error', 'message': 'Error: ' + message}
 
 def within_bounds(commits, index):
@@ -153,17 +175,7 @@ def within_bounds(commits, index):
 	return to_commit_index(index)
 
 def checkout(treeish):
-	try:
-		proc = subprocess.Popen(['git', 'checkout', treeish], cwd=git_repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		proc.wait()
-		if proc.returncode != 0:
-			print "Error running command 'git checkout " + treeish + "'"
-			print "Return code: " + str(proc.returncode)
-			print "Standard error:"
-			print proc.stderr.read()
-			sys.exit(0)
-	except OSError, e:
-		print "Execution failed: " + str(e)
+	execute_cmd(['git', 'checkout', treeish])
 
 def to_treeish(val, db_data):
 	'''
@@ -177,26 +189,32 @@ def to_treeish(val, db_data):
 	{'index': '2', 'type': 'commitindex'}
 	>>> to_treeish_test('prev')
 	{'index': '0', 'type': 'commitindex'}
+	>>> db_data['current'] = 0
+	>>> to_treeish_test('prev')
+	{'message': 'Error: Index -1 is less than 0.', 'type': 'error'}
+	>>> db_data['current'] = 2
+	>>> to_treeish_test('next')
+	{'message': 'Error: Index 3 is greater than the largest commit index.', 'type': 'error'}
 	'''
-	def valid_commit_index(index):
-		return unless_no_commits(commits, lambda commits: within_bounds(commits, int(index)))
 
 	commits = db_data['commits']
 
-	if val == 'start':
-		return valid_commit_index(0)
-	elif val == 'end':
-		return unless_no_commits(commits, lambda commits: within_bounds(commits, len(commits) - 1))
-	elif val == 'next':
-		return unless_no_commits(commits, lambda commits: within_bounds(commits, get_current_index(db_data, -1) + 1))
-	elif val == 'prev':
-		return unless_no_commits(commits, lambda commits: within_bounds(commits, get_current_index(db_data, 1) - 1))
-	else:
-		try:
-			if len(commits) > 0: return valid_commit_index(str(int(str(val))))
-			return error_msg('No commit found.')
-		except ValueError:
-			return {'type': 'branch', 'name': val}
+	def valid_commit_index(index):
+		return unless_no_commits(commits, lambda commits: within_bounds(commits, int(index)))
+
+	commit_index_table = {
+		'start': 0,
+		'end': len(commits) - 1,
+		'next': get_current_index(db_data, -1) + 1,
+		'prev': get_current_index(db_data, 1) - 1
+	}
+
+	if val in commit_index_table: return valid_commit_index(commit_index_table[val])
+
+	try:
+		return valid_commit_index(str(int(str(val))))
+	except ValueError:
+		return {'type': 'branch', 'name': val}
 
 def format_commit(commits, index, prefix='  '):
 	'''
