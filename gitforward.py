@@ -30,27 +30,36 @@ git_log_data = (os.path.basename(git_repo) + ".gitfwd") if git_repo else None
 
 def to_blob(data):
 	'''
-	>>> to_blob({'type': 'blob', 'name': 'stuff', 'data': '123'})
-	"(dp0\\nS'data'\\np1\\nS'123'\\np2\\nsS'type'\\np3\\nS'blob'\\np4\\nsS'name'\\np5\\nS'stuff'\\np6\\ns."
+	>>> to_blob({'current': 0, 'commits': [{'name': '123', 'comment': '456'}]})
+	'current:0\\n123 456'
 	'''
-	import pickle
-	import StringIO
-	
-	f = StringIO.StringIO()
-	pickle.dump(data, f)
-	f.seek(0)
-	return f.read()
+	s = ''
+
+	if 'current' in data:
+		s += 'current:' + str(data['current']) + '\n'
+
+	if 'commits' in data:
+		s += str.join('\n', [commit['name'] + ' ' + commit['comment'] for commit in data['commits']])
+
+	return s.strip()
 
 def from_blob(data):
 	'''
-	>>> from_blob("(dp0\\nS'data'\\np1\\nS'123'\\np2\\nsS'type'\\np3\\nS'blob'\\np4\\nsS'name'\\np5\\nS'stuff'\\np6\\ns.")
-	{'type': 'blob', 'data': '123', 'name': 'stuff'}
+	>>> from_blob('current:0\\n123 456')
+	{'current': 0, 'commits': [{'comment': '456', 'name': '123'}]}
 	'''
-	import pickle
-	import StringIO
-	
-	f = StringIO.StringIO(data)
-	return pickle.load(f)
+	d = {}
+	commitstart = 0
+
+	lines = [line.strip() for line in data.split('\n')]
+	if 'current:' in lines[0] and lines[0].index('current:') == 0:
+		d['current'] = int(lines[0].split(':')[1])
+		commitstart += 1
+
+	if len(lines) > 0:
+		d['commits'] = [{'name': line[0], 'comment': line[1]} for line in [line.split(' ', 1) for line in lines[commitstart:]]]
+
+	return d
 
 def read_db():
 	if not os.path.exists(git_log_data):
@@ -115,7 +124,6 @@ def get_commits_from_repo():
 	return [{'name': commit[0].split(' ')[1], 'comment': commit[commit.index("") + 1].strip() } for commit in commits][::-1]
 
 def write_commits_to_index(commits):
-	commits = get_commits_from_repo()
 	write_db_data('commits', commits)
 
 def parse_commit_data(data):
