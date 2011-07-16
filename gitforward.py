@@ -22,7 +22,7 @@ cmdargs = parser.parse_args(sys.argv[1:])
 cmdargs.direction = cmdargs.next or cmdargs.prev or cmdargs.start or cmdargs.end
 
 if not cmdargs.tests and not cmdargs.repository:
-	print "Please specify a repository."
+	print("Please specify a repository.")
 	sys.exit(0)
 
 git_repo = cmdargs.repository
@@ -94,17 +94,18 @@ def execute_cmd(cmd, cwd=None):
 		proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		proc.wait()
 		if proc.returncode != 0:
-			print "Error running command " + str.join(',', cmd)
-			print "Return code: " + str(proc.returncode)
-			print "Standout output:"
-			print proc.stdout.read()
-			print ""
-			print "Standard error:"
-			print proc.stderr.read()
+			print("Error running command " + str.join(',', cmd))
+			print("Return code: " + str(proc.returncode))
+			print("Standout output:")
+			print(proc.stdout.read())
+			print("")
+			print("Standard error:")
+			print(proc.stderr.read())
 			sys.exit(0)
-		return proc.stdout.read()
-	except OSError, e:
-		print "Execution failed: " + str(e)
+		res = proc.stdout.read().decode()
+		return res
+	except OSError as e:
+		print("Execution failed: " + str(e))
 		sys.exit(0)
 
 def get_commits_from_repo():
@@ -128,7 +129,7 @@ def write_commits_to_index(commits):
 
 def parse_commit_data(data):
 	no_zero_length_lines = lambda l: len(l.strip()) > 0
-	lines = filter(no_zero_length_lines, data.split('\n'))
+	lines = list(filter(no_zero_length_lines, data.split('\n')))
 	return [{'name': line[0], 'comment': line[1].strip()} for line in [line.split(' ', 1) for line in lines] ]
 
 def get_commits_from_index():
@@ -245,7 +246,7 @@ def point_to_commit(db_data, commit_index):
 	commit_index = int(commit_index)
 	commits = db_data['commits']
 	commit = commits[commit_index]
-	print format_current_commit(commits, commit_index)
+	print(format_current_commit(commits, commit_index))
 	checkout(commit['name'])
 	db_data['current'] = commit_index
 	write_db(db_data)
@@ -258,10 +259,10 @@ elif __name__ == '__main__':
 	git_log_data = os.path.basename(git_repo) + ".gitfwd"
 
 	if not os.path.exists(git_repo):
-		print "Directory " + git_repo + " does not exist."
+		print("Directory " + git_repo + " does not exist.")
 		sys.exit(0)
 	elif not os.path.exists(git_repo + "/.git"):
-		print "Directory " + git_repo + "/.git is not a git repository."
+		print("Directory " + git_repo + "/.git is not a git repository.")
 
 	if not os.path.exists(git_log_data) or cmdargs.reset:
 		write_commits_to_index(get_commits_from_repo())
@@ -273,27 +274,27 @@ elif __name__ == '__main__':
 		current_index = get_current_index(db_data, -1)
 		
 		for i in range(len(commits)):
-			print (format_current_commit if i == current_index else format_commit)(commits, i)
+			print((format_current_commit if i == current_index else format_commit)(commits, i))
 	elif cmdargs.reset:
 		del_db_data('current')
 	elif cmdargs.direction:
 		treeish = to_treeish(cmdargs.direction, db_data)
 		if treeish['type'] == 'error':
-			print treeish['message']
+			print(treeish['message'])
 		else:
 			point_to_commit(db_data, treeish['index'])
 	elif cmdargs.index:
 		treeish = to_treeish(cmdargs.index, db_data)
 		if treeish['type'] == 'error':
-			print treeish['message']
+			print(treeish['message'])
 		else:
 			point_to_commit(db_data, treeish['index'])
 	elif cmdargs.branch:
 		treeish = to_treeish(cmdargs.branch, db_data)
 		if treeish['type'] == 'error':
-			print treeish['message']
+			print(treeish['message'])
 		else:
-			print "Checking out branch " + treeish['name']
+			print("Checking out branch " + treeish['name'])
 			checkout(treeish['name'])
 	else:
-		print 'No command specified.'
+		print('No command specified.')
